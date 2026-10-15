@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
-import sys
+from datetime import datetime, timezone
+from importlib.metadata import version
 from pathlib import Path
 
 import great_expectations as gx
@@ -71,7 +73,7 @@ def build_expectation_suite() -> gx.ExpectationSuite:
 
 
 def validate_dataframe(dataframe: pd.DataFrame):
-    """Run the full expectation suite against one in-memory batch."""
+    """Run a GX Checkpoint against one in-memory batch."""
     context = gx.get_context(mode="ephemeral")
     context.variables.progress_bars = {
         "globally": False,
@@ -92,9 +94,59 @@ def validate_dataframe(dataframe: pd.DataFrame):
     validation_definition = context.validation_definitions.add(
         validation_definition
     )
-    return validation_definition.run(
+    checkpoint = context.checkpoints.add(
+        gx.Checkpoint(
+            name="training_data_quality_gate",
+            validation_definitions=[validation_definition],
+            result_format={"result_format": "SUMMARY"},
+        )
+    )
+    checkpoint_result = checkpoint.run(
         batch_parameters={"dataframe": dataframe},
-        result_format={"result_format": "SUMMARY"},
+    )
+    validation_results = list(checkpoint_result.run_results.values())
+    if len(validation_results) != 1:
+        raise RuntimeError(
+            "Expected exactly one validation result from the Checkpoint"
+        )
+    return validation_results[0]
+
+
+def sha256_file(path: Path) -> str:
+    """Return a reproducible fingerprint for an input artifact."""
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def write_run_metadata(
+    *,
+    csv_path: Path,
+    dataframe: pd.DataFrame,
+    validation_result,
+    output_dir: Path,
+    pipeline_outcome: str,
+) -> None:
+    """Persist compact lineage and outcome metadata for this pipeline run."""
+    statistics = validation_result.statistics
+    metadata = {
+        "run_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "input_path": str(csv_path),
+        "input_sha256": sha256_file(csv_path),
+        "rows": int(len(dataframe)),
+        "columns": int(len(dataframe.columns)),
+        "great_expectations_version": version("great-expectations"),
+        "checkpoint_name": "training_data_quality_gate",
+        "expectation_suite_name": "loan_applications_contract",
+        "evaluated_expectations": int(statistics["evaluated_expectations"]),
+        "successful_expectations": int(statistics["successful_expectations"]),
+        "validation_success": bool(validation_result.success),
+        "pipeline_outcome": pipeline_outcome,
+    }
+    (output_dir / "run_metadata.json").write_text(
+        json.dumps(metadata, indent=2), encoding="utf-8"
     )
 
 
@@ -153,6 +205,13 @@ def run_pipeline(csv_path: Path, output_dir: Path) -> int:
     )
 
     if not validation_result.success:
+        write_run_metadata(
+            csv_path=csv_path,
+            dataframe=dataframe,
+            validation_result=validation_result,
+            output_dir=output_dir,
+            pipeline_outcome="training_blocked",
+        )
         failures = failed_expectations(validation_result)
         print(f"VALIDATION FAILED: {len(failures)} expectation(s) failed")
         for failure in failures:
@@ -175,6 +234,13 @@ def run_pipeline(csv_path: Path, output_dir: Path) -> int:
     metrics = train_model(dataframe)
     (output_dir / "model_metrics.json").write_text(
         json.dumps(metrics, indent=2), encoding="utf-8"
+    )
+    write_run_metadata(
+        csv_path=csv_path,
+        dataframe=dataframe,
+        validation_result=validation_result,
+        output_dir=output_dir,
+        pipeline_outcome="training_completed",
     )
     print(
         f"MODEL TRAINED: accuracy={metrics['accuracy']:.3f} "

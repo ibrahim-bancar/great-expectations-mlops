@@ -2,59 +2,73 @@
 
 Target timing: 6 minutes for the slides, 4 minutes for the live demo, then Q&A.
 
-## Slide 1 — Great Expectations: Data Validation
+## Slide 1 — Great Expectations: Data Reliability in ML Systems
 
-“My topic is Great Expectations, an open-source tool for expressing and running data-quality checks. I will show where it fits in an ML pipeline, how its core objects work together, and a small example that prevents a model from training on invalid data.”
+“My topic is Great Expectations. I will present it not only as a data-checking library, but as a reliability component inside an ML system. The demo turns assumptions about training data into an executable gate.”
 
-## Slide 2 — The problem: bad data can produce a valid-looking model
+## Slide 2 — Silent data failures in production
 
-“Model code can run successfully even when input data is wrong. A new null, a value outside the valid range, a duplicate record, or a changed label can alter training without producing a Python exception. The pipeline needs an explicit data contract before training starts.”
+“A pipeline can complete successfully while the data is wrong. Missing values, impossible ranges, duplicates, or schema changes may not raise a Python error, but they can change features and model behavior. This is a systems problem, not only a modeling problem.”
 
-## Slide 3 — Validation in the ML lifecycle
+## Slide 3 — Business, ML, and system objectives
 
-“Great Expectations sits after ingestion and before feature engineering or training. Data enters the pipeline, GX checks it, and only a successful batch continues. The same gate can also run in CI or on scheduled data pipelines.”
+“The business objective is to prevent invalid batches from influencing development decisions. The ML objective is a small binary classifier. The system objective is to fail visibly and preserve evidence. Starting from these objectives keeps the demo focused on operational reliability rather than the accuracy number.”
 
-## Slide 4 — Core concepts
+## Slide 4 — GX in the iterative ML lifecycle
 
-“The Data Context manages GX objects and results. A Data Source connects to pandas. A Data Asset names our logical dataset. A Batch Definition identifies the data for one run. Expectations describe individual rules, and an Expectation Suite groups them. A Validation Definition links the batch and suite.”
+“The lifecycle is iterative: business analysis informs data work; validated data reaches model development; deployment creates monitoring signals; those signals feed the next iteration. GX sits between data engineering and model development. It validates known rules before training, but it does not replace post-deployment drift or model monitoring.”
 
-## Slide 5 — Demo data contract
+## Slide 5 — Core concepts and Checkpoint architecture
 
-“Our example uses loan applications. The contract checks the schema, IDs, missing values, numeric ranges, and the target label. These are simple checks, but they cover several common failure modes that can silently damage an ML experiment.”
+“The Data Context manages GX objects. The Data Source and Data Asset identify the logical data. A Batch Definition selects the current batch. An Expectation Suite contains the contract. A Validation Definition binds data to the suite, and a Checkpoint runs that validation as a reusable workflow boundary.”
 
-## Slide 6 — What happens on failure
+## Slide 6 — The executable data contract
 
-“The bad file contains six deliberate problems. GX returns structured results with the failed expectation, affected column, count, and sample bad values. Our pipeline saves those results, prints a concise summary, returns a nonzero exit code, and never calls model training.”
+“The suite contains thirteen checks for schema, identifiers, completeness, ranges, and labels. The Checkpoint produces a structured result. Our code branches on that result: a failed batch returns a nonzero exit code before model training.”
 
-## Slide 7 — What happens on success
+## Slide 7 — Failed batch: training blocked
 
-“The clean file passes all thirteen expectations. Only then does the script split the data and fit logistic regression. The model metric is not the main point. The important point is that every training run starts from data that satisfied the same explicit contract.”
+“The bad file contains six deliberate violations. GX reports the affected rule, column, count, and examples. The pipeline saves the detailed result and run metadata, including an input hash, then stops. No model metric is produced.”
 
-## Slide 8 — Trade-offs and production use
+## Slide 8 — Valid batch: training continues
 
-“GX provides readable rules, structured evidence, and integrations for dataframes, files, SQL, and Spark. The trade-off is maintenance: teams must own the expectation thresholds, control false alarms, and update contracts when the data legitimately changes. Checkpoints and actions can connect validation to automated workflows.”
+“The clean file passes all thirteen checks. Only then does the classifier train. The accuracy only demonstrates that the next pipeline stage ran. The useful evidence is the validated result plus the dataset fingerprint and tool version.”
 
-## Slide 9 — Live demo
+## Slide 9 — MLOps system qualities
 
-“I will first run the bad dataset and show that training is blocked. Then I will run the clean dataset and show that validation passes and metrics are written. If the live run fails for environmental reasons, the next slide contains captured output from both runs.”
+“This gate improves reliability by failing loudly, maintainability by keeping rules readable and version-controlled, and adaptability by making legitimate contract changes explicit. The same concept can scale to other GX backends, although this small demo intentionally uses pandas.”
 
-## Slide 10 — Takeaway and Q&A
+## Slide 10 — Boundary and takeaway
 
-“Great Expectations turns assumptions about training data into executable tests. In this demo, the validation result controls whether the model can train. That moves data quality from an informal checklist into the ML pipeline.”
+“Validation checks whether a batch meets known expectations. Monitoring detects changes over time in data, model behavior, and business outcomes. Great Expectations solves the first problem here. The takeaway is that data assumptions become executable controls in the ML lifecycle.”
+
+## Four-minute live demo
+
+1. Inspect one invalid row and `build_expectation_suite()` — 45 seconds.
+2. Show the Checkpoint and the branch on `result.success` — 45 seconds.
+3. Run bad data and show the blocked path plus `run_metadata.json` — 70 seconds.
+4. Run clean data and show the pass path plus metrics — 70 seconds.
+5. Summarize the validation/monitoring boundary — 30 seconds.
 
 ## Likely Q&A
 
-**How is this different from unit tests?**  
-Unit tests usually check code behavior with controlled inputs. GX evaluates properties of the actual data batch and produces structured validation results.
+**How is this different from unit tests?**
 
-**Does GX clean the data?**  
-No. It detects and reports violations. The pipeline decides whether to block, quarantine, alert, or trigger another action.
+Unit tests usually check code behavior with controlled inputs. GX evaluates properties of an actual data batch and produces structured validation evidence.
 
-**Can it work with large datasets?**  
-Yes. GX supports pandas, Spark, SQL databases, and file-based data sources. The execution engine pushes or distributes work according to the backend.
+**Does GX clean the data?**
 
-**How should thresholds be chosen?**  
-Start from domain constraints and known failure risks. Add observed statistical ranges carefully, then review false positives and legitimate distribution changes.
+No. It detects and reports violations. The pipeline decides whether to block, quarantine, alert, or trigger remediation.
 
-**Why use an ephemeral Data Context here?**  
-The demo is self-contained and recreates configuration every run. A production project usually uses a persistent context so suites, validation definitions, checkpoints, and results can be reused.
+**Does this detect drift?**
+
+Not by itself in this demo. These expectations enforce known constraints. Distribution and model drift require reference windows, time-based comparison, monitoring, and alerting.
+
+**Why use an ephemeral Data Context?**
+
+It keeps the classroom demo self-contained. A production project normally uses persistent configuration and validation stores.
+
+## Course alignment
+
+- W01: production ML systems include a data stack, assumptions must be monitored, production data is messy, and data needs testing/versioning.
+- W02: begin with business and ML objectives; design for reliability, scalability, maintainability, and adaptability; manage artifacts for reproducibility; treat the lifecycle as iterative; monitor deployment outcomes.

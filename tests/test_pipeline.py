@@ -1,3 +1,5 @@
+import hashlib
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -19,6 +21,11 @@ def test_bad_data_fails_and_blocks_training(tmp_path: Path) -> None:
     )
     assert exit_code == 2
     assert (output_dir / "validation_result.json").exists()
+    metadata = json.loads(
+        (output_dir / "run_metadata.json").read_text(encoding="utf-8")
+    )
+    assert metadata["validation_success"] is False
+    assert metadata["pipeline_outcome"] == "training_blocked"
     assert not (output_dir / "model_metrics.json").exists()
 
 
@@ -30,4 +37,14 @@ def test_clean_data_trains_model(tmp_path: Path) -> None:
     assert exit_code == 0
     assert (output_dir / "validation_result.json").exists()
     assert (output_dir / "model_metrics.json").exists()
+    metadata = json.loads(
+        (output_dir / "run_metadata.json").read_text(encoding="utf-8")
+    )
+    expected_hash = hashlib.sha256(
+        Path("data/loan_applications_clean.csv").read_bytes()
+    ).hexdigest()
+    assert metadata["input_sha256"] == expected_hash
+    assert metadata["great_expectations_version"] == "1.24.0"
+    assert metadata["checkpoint_name"] == "training_data_quality_gate"
+    assert metadata["pipeline_outcome"] == "training_completed"
 

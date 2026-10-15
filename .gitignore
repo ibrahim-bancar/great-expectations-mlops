@@ -6,4 +6,5 @@ artifacts/
 .DS_Store
 .codex-build/
 .codex-finalizer/
+tmp/
 
