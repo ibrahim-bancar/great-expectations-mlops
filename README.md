@@ -109,17 +109,6 @@ rm -rf gx artifacts
 
 They are recreated on the next run.
 
-## Four-minute live-demo sequence
-
-1. Show the selected CSV and the first rows of the data.
-2. Run the clean dataset and show the `8/8` passing terminal summary.
-3. Open Data Docs and show the successful validation.
-4. Change only `FILE_NAME` to the bad dataset and rerun.
-5. Show the seven failed Expectations and invalid-value examples.
-6. Open Data Docs and compare the clean and bad Validation Results.
-7. Enable the Scholarship Expectation and rerun the bad dataset.
-8. Show that the evaluated count increases from eight to nine.
-
 ## Repository contents
 
 ```text
