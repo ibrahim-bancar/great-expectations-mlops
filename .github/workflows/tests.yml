@@ -1,11 +1,11 @@
-name: tests
+name: GX demo
 
 on:
   push:
   pull_request:
 
 jobs:
-  validate-demo:
+  validate-clean-data:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,4 +15,4 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.txt
-      - run: pytest -q
+      - run: python gx_demo.py
