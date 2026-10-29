@@ -23,7 +23,6 @@ CHECKPOINT_NAME = "medical_appointments_checkpoint"
 
 
 
-
 # Step 1: The Data Context manages GX configuration, metadata, and Data Docs.
 # Create the central GX project object.
 context = gx.get_context(mode="file", project_root_dir=PROJECT_DIR)
@@ -155,7 +154,7 @@ suite.add_expectation(
 
 # Total 8 Expectations are defined.
 
-# Live demo: uncomment this block to add a ninth Expectation.
+
 # suite.add_expectation(
 #     gx.expectations.ExpectColumnValuesToBeInSet(
 #         column="Scholarship",
@@ -235,7 +234,7 @@ checkpoint = Checkpoint(
     ],
     result_format={
         "result_format": "SUMMARY",
-        "partial_unexpected_count": 5,
+        "partial_unexpected_count": 10,
     },
 )
 
