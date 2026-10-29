@@ -25,6 +25,7 @@ CHECKPOINT_NAME = "medical_appointments_checkpoint"
 
 
 # Step 1: The Data Context manages GX configuration, metadata, and Data Docs.
+# Create the central GX project object.
 context = gx.get_context(mode="file", project_root_dir=PROJECT_DIR)
 context.variables.progress_bars = {
     "globally": False,
@@ -52,22 +53,34 @@ dataframe["WaitingDays"] = (appointment_dates - scheduled_dates).dt.days
 
 
 # Step 2: Connect the selected CSV to a Data Source, Asset, and Batch Definition.
+# The Data Source connects GX to pandas.
 data_source = context.data_sources.add_or_update_pandas(
     name="medical_appointments_source"
 )
 
+# The Data Asset represents the logical appointments dataset.
 data_asset = data_source.add_dataframe_asset(name="medical_appointments_asset")
+
+# The Batch Definition selects the whole DataFrame for validation.
 batch_definition = data_asset.add_batch_definition_whole_dataframe(
     name="selected_csv_batch"
 )
 
+# Batch Parameters provide the current in-memory DataFrame at runtime.
 batch_parameters = {"dataframe": dataframe}
+
+# The Batch is the concrete data validated in this run.
 batch = batch_definition.get_batch(batch_parameters=batch_parameters)
 
 
 
 
 # Step 3: Each Expectation is one rule; the Suite is the complete data contract.
+
+
+# The Suite groups all Expectations into one data contract.
+suite = gx.ExpectationSuite(name="medical_appointments_suite")
+
 expected_columns = [
     "PatientId",
     "AppointmentID",
@@ -85,8 +98,6 @@ expected_columns = [
     "No-show",
     "WaitingDays",
 ]
-
-suite = gx.ExpectationSuite(name="medical_appointments_suite")
 
 suite.add_expectation(
     gx.expectations.ExpectTableColumnsToMatchOrderedList(
@@ -155,10 +166,12 @@ suite.add_expectation(
 
 
 # Replacing the stored Suite prevents a previously uncommented rule from lingering.
+# Save the current Suite in the Data Context.
 suite = context.suites.add_or_update(suite)
 
 
 # Step 4: The Validation Definition connects the Batch Definition and Suite.
+# Define which Batch Definition is checked by which Suite.
 validation_definition = gx.ValidationDefinition(
     name="validate_medical_appointments",
     data=batch_definition,
@@ -204,14 +217,17 @@ except DataContextError:
 
 # Step 4 continued: The Checkpoint runs validation, actions, and Data Docs.
 
+# The Checkpoint combines validations with post-validation Actions.
 checkpoint = Checkpoint(
     name=CHECKPOINT_NAME,
     validation_definitions=[validation_definition],
     actions=[
+        # Built-in Action: update the Data Docs report.
         UpdateDataDocsAction(
             name="update_local_data_docs",
             site_names=["local_site"],
         ),
+        # Custom Action: write the validation status to a local file.
         WriteStatusAction(
             name="write_local_status",
             status_file=str(STATUS_FILE),
@@ -222,6 +238,8 @@ checkpoint = Checkpoint(
         "partial_unexpected_count": 5,
     },
 )
+
+# Run the workflow with the current DataFrame.
 checkpoint_result = checkpoint.run(batch_parameters=batch_parameters)
 context.checkpoints.delete(CHECKPOINT_NAME)  # Prevent conflicts on repeated runs.
 
